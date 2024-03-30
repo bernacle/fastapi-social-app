@@ -1,21 +1,35 @@
-from typing import Optional
-from fastapi import Response, FastAPI, status, HTTPException
+import time
+from fastapi import Response, FastAPI, status, HTTPException, Depends
 from pydantic import BaseModel
 from random import randint
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from . import models
+from .database import engine, SessionLocal, get_db
+from sqlalchemy.orm import Session
 
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
 
 class Post(BaseModel):
     title: str
     content: str
     published: bool = True
-    rating: Optional[int] = None
 
 
-my_posts = [{"title": "Post 1", "content": "This is the content of post 1", "published": True, "rating": 5, "id": 1},
-            {"title": "Post 2", "content": "This is the content of post 2", "published": False, "rating": 4, "id": 2},
-            {"title": "Post 3", "content": "This is the content of post 3", "published": True, "rating": 3, "id": 3},]
+try:
+    conn = psycopg2.connect(host="localhost", database="fastapi", user="post2gres", password="123456", cursor_factory=RealDictCursor)
+    cursor = conn.cursor()  
+    print("Connected to the database") 
+except Exception as e:
+    print(e)
+    time.sleep(2)
+
+my_posts = [{"title": "Post 1", "content": "This is the content of post 1", "published": True, "id": 1},
+            {"title": "Post 2", "content": "This is the content of post 2", "published": False, "id": 2},
+            {"title": "Post 3", "content": "This is the content of post 3", "published": True, "id": 3},]
 
 
 def find_post(id):
@@ -29,8 +43,10 @@ def find_post_index(id):
             return i
 
 @app.get("/posts")
-def get_posts():
-    return {"data": my_posts}
+def get_posts(db: Session = Depends(get_db)):
+
+    posts = db.query(models.Post).all()
+    return {"data": posts}
 
 @app.post("/posts", status_code=status.HTTP_201_CREATED)
 def create_posts(post: Post):
